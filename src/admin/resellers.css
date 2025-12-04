@@ -1,0 +1,126 @@
+/* ---- PREMIUM - Resellers Page ---- */
+
+.res-wrapper {
+  display: flex;
+  gap: 22px;
+  width: 100%;
+  padding: 10px;
+}
+
+/* --------------- LEFT PANEL (List) --------------- */
+
+.res-list-panel {
+  width: 330px;
+  padding: 20px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+.res-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  max-height: 68vh;
+  overflow-y: auto;
+}
+
+.res-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  margin-bottom: 12px;
+  background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(6px);
+  transition: 0.25s;
+}
+
+.res-item:hover {
+  transform: translateX(5px);
+  background: rgba(77,136,255,0.15);
+}
+
+.res-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg,#4d88ff,#1cc6a7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.res-info .res-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.res-info .res-id {
+  font-size: 12px;
+  color: #98a6b8;
+}
+
+.res-loading {
+  color: #8fa4c7;
+  padding: 20px 0;
+}
+
+/* ---------------- RIGHT PANEL (Add Form) ---------------- */
+
+.res-form-panel {
+  flex: 1;
+  padding: 20px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 10px 35px rgba(0,0,0,0.4);
+}
+
+.res-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20px;
+}
+
+.res-field label {
+  margin-bottom: 6px;
+  color: #95a2b8;
+  font-size: 14px;
+}
+
+.res-field input {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.05);
+  color: white;
+  transition: 0.25s;
+}
+
+.res-field input:focus {
+  border-color: #4d88ff;
+  background: rgba(255,255,255,0.12);
+}
+
+.res-add-btn {
+  padding: 14px 22px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg,#4d88ff,#1cc6a7);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.25s;
+  width: 200px;
+}
+
+.res-add-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(50,70,255,0.35);
+}

@@ -1,0 +1,132 @@
+/* src/admin/categories.css - premium structured UI */
+
+/* container */
+.cat-wrapper {
+  display: flex;
+  gap: 22px;
+  width: 100%;
+  padding: 10px;
+}
+
+/* left category panel */
+.cat-panel {
+  width: 340px;
+  padding: 18px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-head h2 { margin: 0 0 12px 0; font-size: 20px; }
+
+/* list */
+.cat-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  max-height: 64vh;
+}
+
+.cat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.02);
+  transition: all .18s;
+}
+
+.cat-item:hover { transform: translateX(4px); background: rgba(77,136,255,0.06); }
+
+.cat-item.active { background: linear-gradient(135deg, rgba(77,136,255,0.20), rgba(28,198,167,0.08)); box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+
+.cat-info { display:flex; gap:12px; align-items:center; cursor: pointer; }
+.cat-circle {
+  width: 42px; height: 42px; border-radius: 10px; display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(135deg,#4d88ff,#1cc6a7); color: #fff; font-weight:700;
+}
+
+.cat-name { font-weight:600; font-size:15px; }
+.cat-id { color:#9aa6b2; font-size:12px; }
+
+/* delete */
+.btn-delete { background:none; border:none; color:#ff6b6b; font-size:16px; cursor:pointer; }
+
+/* add box */
+.add-box {
+  margin-top: auto;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-top: 14px;
+}
+.input-text { padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.02); color:#fff; }
+.input-text.small { padding:8px 10px; width:160px; }
+.btn-add { padding:10px 14px; border-radius:10px; background: linear-gradient(135deg,#4d88ff,#1cc6a7); color:white; border:none; cursor:pointer; }
+.btn-add.small { padding:8px 10px; }
+
+/* right editor */
+.cat-editor { flex:1; display:flex; flex-direction:column; gap:12px; }
+
+.editor-card {
+  padding: 18px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.008));
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+/* top meta */
+.editor-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.meta-row { display:flex; gap:8px; margin-top:6px; }
+.meta-pill { background: rgba(255,255,255,0.02); padding:6px 10px; border-radius:10px; color:#9aa6b2; font-size:13px; }
+
+/* Roles section */
+.roles-section { margin-top: 12px; display:flex; flex-direction:column; gap:12px; }
+.roles-header { display:flex; justify-content:space-between; align-items:center; }
+.roles-actions { display:flex; gap:8px; align-items:center; }
+
+/* role card */
+.role-card {
+  padding:12px;
+  border-radius:12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.02);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.role-header { display:flex; justify-content:space-between; align-items:center; }
+.role-title { display:flex; flex-direction:column; }
+.role-id { font-size:12px; color:#95a2b8; margin-top:2px; }
+
+.role-controls { display:flex; gap:8px; align-items:center; }
+
+/* rule rows */
+.role-rules { display:flex; flex-direction:column; gap:8px; }
+.rule-row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.rule-inputs { display:flex; gap:8px; align-items:center; }
+.rule-field { width:86px; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.02); color:#fff; }
+.rule-price { width:120px; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background: rgba(255,255,255,0.02); color:#fff; }
+.rule-sep { color:#9aa6b2; margin:0 4px; }
+
+/* small buttons */
+.btn-ghost { padding:8px 10px; border-radius:8px; background:transparent; border:1px solid rgba(255,255,255,0.03); color:#fff; cursor:pointer; }
+.btn-danger { padding:8px 10px; border-radius:8px; background:#ff4d4d; color:#fff; border:none; cursor:pointer; }
+.btn-save { padding:10px 14px; border-radius:10px; background: linear-gradient(135deg,#4d88ff,#1cc6a7); color:white; border:none; cursor:pointer; }
+.btn-save.small { padding:8px 10px; }
+
+/* empty states */
+.roles-empty, .editor-empty { color:#9aa6b2; padding: 32px; text-align:center; }
+
+/* responsive */
+@media (max-width: 880px) {
+  .cat-wrapper { flex-direction:column; }
+  .cat-panel { width: 100%; max-height: 320px; overflow:auto; }
+}
