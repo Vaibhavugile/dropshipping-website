@@ -1,4 +1,3 @@
-// functions/index.js (add)
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
@@ -6,48 +5,77 @@ admin.initializeApp();
 const auth = admin.auth();
 const db = admin.firestore();
 
-/**
- * Callable: createResellerUser
- * - only callable by admins (we check custom claim 'admin' or restrict via your own logic)
- * payload: { email, password, resellerId }
- * returns: { uid }
- */
-exports.createResellerUser = functions.https.onCall(async (data, context) => {
-  // SECURITY: ensure caller is admin
-  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Admin auth required');
-  const caller = context.auth.token || {};
-  if (!caller.admin) {
-    throw new functions.https.HttpsError('permission-denied', 'Admin privileges required');
-  }
+/** Helper to remove undefined properties */
+function clean(obj) {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([k, v]) => v !== undefined)
+  );
+}
 
-  const { email, password, resellerId } = data || {};
-  if (!email || !password || !resellerId) throw new functions.https.HttpsError('invalid-argument', 'Missing fields');
+exports.createResellerUser = functions.https.onCall(async (data, context) => {
+  console.log("📩 Received payload:", data);
+
+  let email = data?.email || null;
+  let password = data?.password || null;
+  let resellerId = data?.resellerId || null;
 
   try {
-    // Create the user
-    const userRecord = await auth.createUser({ email, password, emailVerified: false });
-    // Set custom claims to mark user as reseller and associate resellerId
-    await auth.setCustomUserClaims(userRecord.uid, { reseller: true, resellerId });
+    // ------------------------------------
+    // 1) Create Firebase Auth User
+    // ------------------------------------
+    const userRecord = await auth.createUser(clean({
+      email,
+      password
+    }));
 
-    // Optional: create a user doc for quick client reads
-    await db.collection('users').doc(userRecord.uid).set({
+    console.log("✅ Auth user created:", userRecord.uid);
+
+    // ------------------------------------
+    // 2) Assign custom reseller claims
+    // ------------------------------------
+    await auth.setCustomUserClaims(userRecord.uid, clean({
+      reseller: true,
+      resellerId
+    }));
+
+    console.log("🔐 Claims set");
+
+    // ------------------------------------
+    // 3) Create users/{uid} doc
+    // ------------------------------------
+    await db.collection("users").doc(userRecord.uid).set(clean({
       uid: userRecord.uid,
       email,
       resellerId,
-      role: 'reseller',
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+      role: "reseller",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }));
 
-    // Also ensure reseller metadata exists
-    const metaRef = db.collection('resellersMeta').doc(resellerId);
-    const metaSnap = await metaRef.get();
-    if (!metaSnap.exists) {
-      await metaRef.set({ id: resellerId, name: resellerId, domains: [], branding: {} }, { merge: true });
-    }
+    console.log("🗂️ Firestore user doc created");
 
-    return { uid: userRecord.uid };
+    // ------------------------------------
+    // 4) Ensure reseller metadata exists
+    // ------------------------------------
+    const metaRef = db.collection("resellersMeta").doc(resellerId);
+
+    await metaRef.set(
+      clean({
+        id: resellerId,
+        email,
+        name: resellerId,
+        domains: [],
+        branding: {},
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }),
+      { merge: true }
+    );
+
+    console.log("🏷️ Reseller meta updated");
+
+    return { success: true, uid: userRecord.uid };
+
   } catch (err) {
-    console.error('createResellerUser error:', err);
-    throw new functions.https.HttpsError('internal', err.message || 'Create user failed');
+    console.error("❌ createResellerUser error:", err);
+    throw new functions.https.HttpsError("internal", err.message || "Create user failed");
   }
 });

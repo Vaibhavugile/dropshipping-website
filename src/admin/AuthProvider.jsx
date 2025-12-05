@@ -1,21 +1,26 @@
 // src/admin/AuthProvider.jsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { firebaseService } from "../api/firebaseService";
 
 const AuthContext = createContext(null);
 
 /**
  * AdminAuthProvider - wraps admin UI and provides:
- *  - user
- *  - isAdmin
- *  - loading
+ *  - user (firebase user)
+ *  - adminMeta (document from /admins if present)
+ *  - isAdmin (bool)
+ *  - loading (auth state)
  *  - login(email,password)
  *  - logout()
+ *
+ * Notes:
+ * - This looks up /admins by email (query) — your /admins collection should have documents
+ *   with an `email` field for admin accounts.
  */
 export function AdminAuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [adminMeta, setAdminMeta] = useState(null); // admin firestore doc data
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const auth = getAuth();
@@ -23,17 +28,33 @@ export function AdminAuthProvider({ children }) {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      setAdminMeta(null);
+      setIsAdmin(false);
+
       if (u) {
+        // Prefer using email (your admins collection stores email)
+        const email = u.email || "";
+
         try {
-          const adminDoc = await getDoc(doc(db, "admins", u.uid));
-          setIsAdmin(Boolean(adminDoc.exists()));
+          // firebaseService.getAdminByEmail performs a query against /admins
+          const adminDoc = await firebaseService.getAdminByEmail(email);
+          if (adminDoc) {
+            setAdminMeta(adminDoc);
+            setIsAdmin(true);
+          } else {
+            setAdminMeta(null);
+            setIsAdmin(false);
+          }
         } catch (err) {
           console.error("admin check failed", err);
+          setAdminMeta(null);
           setIsAdmin(false);
         }
       } else {
+        setAdminMeta(null);
         setIsAdmin(false);
       }
+
       setLoading(false);
     });
     return () => unsub();
@@ -44,7 +65,7 @@ export function AdminAuthProvider({ children }) {
   const logout = () => signOut(auth);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, login, logout }}>
+    <AuthContext.Provider value={{ user, adminMeta, loading, isAdmin, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

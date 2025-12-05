@@ -1,3 +1,4 @@
+// src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
@@ -7,14 +8,17 @@ import Cart from "./Cart";
 // Admin Panel
 import AdminApp from "./admin/AdminApp";
 
+// Reseller Dashboard
+import ResellerApp from "./reseller/ResellerApp";
+
 export default function App() {
-  const resellerId = "default"; // later auto-detect from domain
+  const resellerId = "default";
 
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* --------- Storefront (Public Site) --------- */}
+        {/* ---- Public Storefront ---- */}
         <Route
           path="/"
           element={
@@ -22,12 +26,10 @@ export default function App() {
               <header style={{ marginBottom: 20 }}>
                 <h1>Demo Store</h1>
               </header>
-
               <main style={{ display: "flex", gap: 20 }}>
                 <div style={{ flex: 1 }}>
                   <ProductList resellerId={resellerId} />
                 </div>
-
                 <aside style={{ width: 360 }}>
                   <Cart />
                 </aside>
@@ -36,8 +38,11 @@ export default function App() {
           }
         />
 
-        {/* --------- Admin App Routes --------- */}
+        {/* ---- Admin ---- */}
         <Route path="/admin/*" element={<AdminApp />} />
+
+        {/* ---- Reseller Dashboard ---- */}
+        <Route path="/reseller/*" element={<ResellerApp />} />
 
       </Routes>
     </BrowserRouter>

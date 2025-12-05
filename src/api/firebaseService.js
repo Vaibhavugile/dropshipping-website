@@ -8,7 +8,9 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  query,
+  where
 } from "firebase/firestore";
 
 import {
@@ -21,21 +23,16 @@ import {
 /**
  * Firestore + Storage implementation for admin & UI
  *
- * Exposed:
- * - listCategories, listProductsByCategory, getPriceRoleRules, listResellerOrders
- * - createOrderAggregate (callable)
- * - addCategory, deleteCategory, getCategoryPriceRoles, setCategoryPriceRoles
- * - addProduct, updateProduct, deleteProduct
- * - listResellers, addReseller, listAllOrders
- * - uploadFiles(categoryId, productId, FileList, onProgress)
- * - deleteFile(storagePath)
+ * (All previous methods preserved)
+ *
+ * New helper:
+ * - getAdminByEmail(email) => returns admin doc data or null
  *
  * Note: ensure your src/firebase.js exports `db`, `functions`, and `storage`.
  */
 
 export const firebaseService = {
   // ---------- Public reads (UI) ----------
-
   async listCategories() {
     try {
       const col = collection(db, "categories");
@@ -47,8 +44,6 @@ export const firebaseService = {
     }
   },
 
-
-  
   async listProductsByCategory(categoryId) {
     try {
       const col = collection(db, "categories", categoryId, "products");
@@ -96,8 +91,6 @@ export const firebaseService = {
   },
 
   // ---------- Admin helpers (used by Admin Panel) ----------
-
-  // Categories
   async addCategory({ id, name, images = [] }) {
     try {
       await setDoc(doc(db, "categories", id), { id, name, images });
@@ -107,7 +100,6 @@ export const firebaseService = {
     }
   },
 
-  // WARNING: this deletes only the category document. Subcollections remain.
   async deleteCategory(categoryId) {
     try {
       await deleteDoc(doc(db, "categories", categoryId));
@@ -117,7 +109,6 @@ export const firebaseService = {
     }
   },
 
-  // Price roles (categories/{categoryId}/priceRoles/{roleId})
   async getCategoryPriceRoles(categoryId) {
     try {
       const col = collection(db, "categories", categoryId, "priceRoles");
@@ -143,7 +134,6 @@ export const firebaseService = {
     }
   },
 
-  // Products
   async addProduct(categoryId, product) {
     try {
       await setDoc(doc(db, "categories", categoryId, "products", product.id), product);
@@ -153,7 +143,6 @@ export const firebaseService = {
     }
   },
 
-  // Partial update of product doc
   async updateProduct(categoryId, productId, patchObj) {
     try {
       await updateDoc(doc(db, "categories", categoryId, "products", productId), patchObj);
@@ -172,7 +161,6 @@ export const firebaseService = {
     }
   },
 
-  // Resellers metadata
   async addReseller(rs) {
     try {
       await setDoc(doc(db, "resellersMeta", rs.id), rs);
@@ -192,7 +180,6 @@ export const firebaseService = {
     }
   },
 
-  // Orders: admin helper to get all orders across resellers
   async listAllOrders() {
     try {
       const resellersSnap = await getDocs(collection(db, "resellersMeta"));
@@ -221,14 +208,7 @@ export const firebaseService = {
     }
   },
 
-  // ---------- Storage helpers (uploads + deletion) ----------
-  /**
-   * Upload multiple File objects to Storage under:
-   *   products/{categoryId}/{productId}/{timestamp-name}
-   * onProgress callback receives: { name, path, percent, bytesTransferred, total }
-   *
-   * Returns array of { url, path, name, size, contentType }
-   */
+  // ---------- Storage helpers ----------
   async uploadFiles(categoryId, productId, files, onProgress = null) {
     try {
       if (!categoryId || !productId) throw new Error("Missing categoryId or productId for upload");
@@ -266,7 +246,6 @@ export const firebaseService = {
     }
   },
 
-  // Delete a storage object by its storage path
   async deleteFile(storagePath) {
     try {
       if (!storagePath) throw new Error("Missing storagePath");
@@ -275,6 +254,100 @@ export const firebaseService = {
       return { success: true };
     } catch (err) {
       console.error("deleteFile error:", err);
+      throw err;
+    }
+  },
+
+  // ---------- Convenience helpers ----------
+
+  // Get admin doc by email (returns first match or null)
+  async getAdminByEmail(email) {
+    try {
+      if (!email) return null;
+      const qCol = collection(db, "admins");
+      const q = query(qCol, where("email", "==", email));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const d = snap.docs[0];
+        return { id: d.id, ...d.data() };
+      }
+      return null;
+    } catch (err) {
+      console.error("getAdminByEmail error:", err);
+      throw err;
+    }
+  },
+
+  // Get reseller metadata
+  async getResellerMeta(resellerId) {
+    try {
+      const snap = await getDoc(doc(db, "resellersMeta", resellerId));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    } catch (err) {
+      console.error("getResellerMeta error:", err);
+      throw err;
+    }
+  },
+  async getUserDoc(uid) {
+  try {
+    const snap = await getDoc(doc(db, "users", uid));
+    return snap.exists() ? snap.data() : null;
+  } catch (err) {
+    console.error("getUserDoc error:", err);
+    throw err;
+  }
+},
+
+// inside your firebaseService export (src/api/firebaseService.js)
+
+  /**
+   * Create a user doc in /users/{uid}
+   * Used after creating a Firebase Auth user from the client (REST) or server.
+   * `userObj` should be a plain POJO. We will not write undefined values.
+   */
+  async createUserDoc(uid, userObj = {}) {
+    try {
+      if (!uid) throw new Error("Missing uid");
+      // remove undefined values
+      const clean = Object.fromEntries(
+        Object.entries(userObj).filter(([k, v]) => v !== undefined)
+      );
+      // prefer server timestamp but client-side we use JS Date()
+      if (!clean.createdAt) clean.createdAt = new Date();
+      await setDoc(doc(db, "users", uid), clean);
+      return { success: true };
+    } catch (err) {
+      console.error("createUserDoc error:", err);
+      throw err;
+    }
+  },
+
+
+
+  // Partial update of reseller metadata
+  async updateResellerMeta(resellerId, patchObj) {
+    try {
+      await updateDoc(doc(db, "resellersMeta", resellerId), patchObj);
+      return true;
+    } catch (err) {
+      console.error("updateResellerMeta error:", err);
+      throw err;
+    }
+  },
+
+  // Resolve reseller by domain/hostname (returns first match or null)
+  async getResellerByDomain(hostname) {
+    try {
+      const qCol = collection(db, "resellersMeta");
+      const q = query(qCol, where("domains", "array-contains", hostname));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const d = snap.docs[0];
+        return { id: d.id, ...d.data() };
+      }
+      return null;
+    } catch (err) {
+      console.error("getResellerByDomain error:", err);
       throw err;
     }
   }
