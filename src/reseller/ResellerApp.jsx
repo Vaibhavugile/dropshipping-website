@@ -5,7 +5,8 @@ import { ResellerAuthProvider, useResellerAuth } from "./ResellerAuthProvider";
 
 import ResellerLogin from "./ResellerLogin";
 import ResellerProfile from "./Profile";
-
+import ProductManager from "./ProductsManager"; // path where you added it
+import "./reseller-app.css";
 /* ============================================================
    AUTH GUARD PROTECTED COMPONENT
 ============================================================ */
@@ -28,6 +29,7 @@ function ResellerNav() {
   return (
     <nav className="reseller-nav">
       <Link to="/reseller/profile">Branding</Link>
+      <Link to="/reseller/products">Products</Link>
       <button onClick={logout}>Logout</button>
     </nav>
   );
@@ -59,6 +61,7 @@ export default function ResellerApp() {
           >
             <Route path="profile" element={<ResellerProfile />} />
             <Route index element={<Navigate to="profile" replace />} />
+            <Route path="products" element={<ProductManager />} />
           </Route>
         </Route>
 
