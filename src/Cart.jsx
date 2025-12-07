@@ -15,30 +15,30 @@ function generateId() {
   );
 }
 
-export default function Cart({ resellerId = "default" }) {
+export default function Cart({
+  resellerId = "default",
+  pricingRole = "retail",
+  onRoleChange,
+}) {
   const { items } = useCartState();
   const dispatch = useCartDispatch();
-
   const hasItems = items && items.length > 0;
 
-  // 🔹 Dynamic roles from Firestore
+  // dynamic roles list from Firestore
   const [roleOptions, setRoleOptions] = useState(["retail"]);
-  const [role, setRole] = useState("retail");
   const [roleLoading, setRoleLoading] = useState(false);
 
-  // Pricing / totals
   const [totals, setTotals] = useState({ subtotal: 0, breakdown: [] });
   const [totalsLoading, setTotalsLoading] = useState(false);
   const [totalsError, setTotalsError] = useState(null);
 
-  // Checkout state
   const [loading, setLoading] = useState(false);
   const [orderResult, setOrderResult] = useState(null);
   const [error, setError] = useState(null);
 
-  // ---------------------------------------------------------------------------
-  // 1) Load available roles for this reseller/category, to drive dropdown
-  // ---------------------------------------------------------------------------
+  const effectiveRole = pricingRole || "retail";
+
+  // 1) Load available roles for this reseller/category
   useEffect(() => {
     let cancelled = false;
 
@@ -46,17 +46,16 @@ export default function Cart({ resellerId = "default" }) {
       if (!hasItems) {
         if (!cancelled) {
           setRoleOptions(["retail"]);
-          setRole("retail");
+          onRoleChange && onRoleChange("retail");
         }
         return;
       }
 
-      // Pick first item’s category as representative
       const firstWithCat = items.find((it) => it.categoryId);
       if (!firstWithCat || !firstWithCat.categoryId) {
         if (!cancelled) {
           setRoleOptions(["retail"]);
-          setRole("retail");
+          onRoleChange && onRoleChange("retail");
         }
         return;
       }
@@ -67,7 +66,7 @@ export default function Cart({ resellerId = "default" }) {
       try {
         let rolesObj = null;
 
-        // 1) Try reseller-specific roles first
+        // reseller overrides first
         if (resellerId) {
           try {
             rolesObj =
@@ -80,7 +79,7 @@ export default function Cart({ resellerId = "default" }) {
           }
         }
 
-        // 2) Fallback to admin category roles
+        // fallback to admin
         if (!rolesObj) {
           try {
             rolesObj =
@@ -97,17 +96,18 @@ export default function Cart({ resellerId = "default" }) {
 
         if (!cancelled) {
           setRoleOptions(ids);
-          setRole((prev) => {
-            if (ids.includes(prev)) return prev;
-            if (ids.includes("retail")) return "retail";
-            return ids[0];
-          });
+
+          // ensure current role is valid
+          if (!ids.includes(effectiveRole)) {
+            const newRole = ids.includes("retail") ? "retail" : ids[0];
+            onRoleChange && onRoleChange(newRole);
+          }
         }
       } catch (err) {
         console.error("loadRoles error:", err);
         if (!cancelled) {
           setRoleOptions(["retail"]);
-          setRole("retail");
+          onRoleChange && onRoleChange("retail");
         }
       } finally {
         if (!cancelled) setRoleLoading(false);
@@ -118,11 +118,10 @@ export default function Cart({ resellerId = "default" }) {
     return () => {
       cancelled = true;
     };
-  }, [items, resellerId, hasItems]);
+    // include pricingRole so if parent changes it, we revalidate
+  }, [items, resellerId, hasItems, onRoleChange, effectiveRole]);
 
-  // ---------------------------------------------------------------------------
   // 2) Recompute pricing summary whenever cart / role / reseller change
-  // ---------------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -142,7 +141,7 @@ export default function Cart({ resellerId = "default" }) {
       try {
         const res = await computeAggregateCartTotal(
           items,
-          role,
+          effectiveRole,
           resellerId || null
         );
         if (!cancelled) {
@@ -163,9 +162,8 @@ export default function Cart({ resellerId = "default" }) {
     return () => {
       cancelled = true;
     };
-  }, [items, role, resellerId, hasItems]);
+  }, [items, effectiveRole, resellerId, hasItems]);
 
-  // helper: find pricing for a given cart index
   function getItemPricing(index) {
     if (!totals || !Array.isArray(totals.breakdown)) return null;
     for (const cat of totals.breakdown) {
@@ -183,9 +181,6 @@ export default function Cart({ resellerId = "default" }) {
     return null;
   }
 
-  // ---------------------------------------------------------------------------
-  // 3) Checkout – still recompute on server; role is sent as selected
-  // ---------------------------------------------------------------------------
   async function onCheckout() {
     setError(null);
     setOrderResult(null);
@@ -208,7 +203,7 @@ export default function Cart({ resellerId = "default" }) {
     try {
       const calc = await computeAggregateCartTotal(
         items,
-        role,
+        effectiveRole,
         resellerId || null
       );
       console.log("Local cart pricing:", calc);
@@ -216,7 +211,7 @@ export default function Cart({ resellerId = "default" }) {
       const idempotencyKey = generateId();
       const payload = {
         resellerId: resellerId || "default",
-        role, // 🔹 send the selected role
+        role: effectiveRole,
         items: items.map((i) => ({
           categoryId: i.categoryId,
           productId: i.productId,
@@ -261,9 +256,6 @@ export default function Cart({ resellerId = "default" }) {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // UI
-  // ---------------------------------------------------------------------------
   return (
     <div className="cart">
       <h3 className="cart-title">Cart</h3>
@@ -330,14 +322,14 @@ export default function Cart({ resellerId = "default" }) {
           );
         })}
 
-      {/* 🔹 Dynamic role selector based on Firestore roles */}
+      {/* 🔹 Shared role dropdown */}
       {hasItems && (
         <div className="cart-role">
           <label>
             Pricing role:
             <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
+              value={effectiveRole}
+              onChange={(e) => onRoleChange && onRoleChange(e.target.value)}
             >
               {roleOptions.map((r) => (
                 <option key={r} value={r}>
@@ -352,7 +344,6 @@ export default function Cart({ resellerId = "default" }) {
         </div>
       )}
 
-      {/* Totals */}
       {hasItems && (
         <div className="cart-summary">
           {totalsLoading ? (
@@ -371,8 +362,8 @@ export default function Cart({ resellerId = "default" }) {
                 </strong>
               </div>
               <div className="cart-summary-note">
-                Prices use the <strong>{role}</strong> tier for this
-                reseller
+                Prices use the <strong>{effectiveRole}</strong> tier for
+                this reseller
                 {resellerId ? ` (reseller: ${resellerId})` : ""}, same
                 rules as the product cards.
               </div>
@@ -381,7 +372,6 @@ export default function Cart({ resellerId = "default" }) {
         </div>
       )}
 
-      {/* Checkout */}
       <div className="cart-checkout">
         <button
           onClick={onCheckout}

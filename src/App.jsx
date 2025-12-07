@@ -45,7 +45,7 @@ function useResolvedReseller() {
           return;
         }
 
-        const host = window.location.host.toLowerCase();       // "localhost:3000" or "shop.mybrand.com"
+        const host = window.location.host.toLowerCase(); // "localhost:3000" or "shop.mybrand.com"
         const hostname = window.location.hostname.toLowerCase(); // "localhost" or "shop.mybrand.com"
 
         let reseller = null;
@@ -97,10 +97,12 @@ export default function App() {
   // - else "default" to preserve old behavior
   const effectiveResellerId = resellerId || "default";
 
+  // 🔹 Shared pricing role for storefront (ProductList + Cart)
+  const [pricingRole, setPricingRole] = useState("retail");
+
   return (
     <BrowserRouter>
       <Routes>
-
         {/* ---- Public Storefront ---- */}
         <Route
           path="/"
@@ -118,24 +120,43 @@ export default function App() {
                   <>
                     <h1>{meta?.name || "Demo Store"}</h1>
                     <div style={{ fontSize: 13, color: "#6b7280" }}>
-                      Host: <code>{typeof window !== "undefined" ? window.location.host : ""}</code>{" "}
-                      · Reseller: <strong>{effectiveResellerId}</strong>
+                      Host:{" "}
+                      <code>
+                        {typeof window !== "undefined"
+                          ? window.location.host
+                          : ""}
+                      </code>{" "}
+                      · Reseller: <strong>{effectiveResellerId}</strong> · Role:{" "}
+                      <strong>{pricingRole}</strong>
                     </div>
                   </>
                 )}
               </header>
 
-              <main style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+              <main
+                style={{
+                  display: "flex",
+                  gap: 20,
+                  alignItems: "flex-start",
+                }}
+              >
                 <div style={{ flex: 1 }}>
                   {/* Only block products UI while resolving */}
                   {loading && !resellerId ? (
                     <div>Resolving store for this host…</div>
                   ) : (
-                    <ProductList resellerId={effectiveResellerId} />
+                    <ProductList
+                      resellerId={effectiveResellerId}
+                      pricingRole={pricingRole}
+                    />
                   )}
                 </div>
                 <aside style={{ width: 360 }}>
-                  <Cart resellerId={effectiveResellerId} />
+                  <Cart
+                    resellerId={effectiveResellerId}
+                    pricingRole={pricingRole}
+                    onRoleChange={setPricingRole}
+                  />
                 </aside>
               </main>
             </div>
@@ -147,7 +168,6 @@ export default function App() {
 
         {/* ---- Reseller Dashboard ---- */}
         <Route path="/reseller/*" element={<ResellerApp />} />
-
       </Routes>
     </BrowserRouter>
   );

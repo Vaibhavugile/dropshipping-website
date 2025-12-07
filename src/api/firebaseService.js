@@ -10,14 +10,15 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where
+  where,
+  writeBatch,
 } from "firebase/firestore";
 
 import {
   ref as storageRef,
   uploadBytesResumable,
   getDownloadURL,
-  deleteObject
+  deleteObject,
 } from "firebase/storage";
 
 /**
@@ -32,7 +33,7 @@ export const firebaseService = {
     try {
       const col = collection(db, "categories");
       const snap = await getDocs(col);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     } catch (err) {
       console.error("listCategories error:", err);
       throw err;
@@ -43,13 +44,14 @@ export const firebaseService = {
     try {
       const col = collection(db, "categories", categoryId, "products");
       const snap = await getDocs(col);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     } catch (err) {
       console.error("listProductsByCategory error:", err);
       throw err;
     }
   },
 
+  // single price role doc (admin) – used by some older code; still fine
   async getPriceRoleRules(categoryId, role) {
     try {
       const roleRef = doc(db, "categories", categoryId, "priceRoles", role);
@@ -65,7 +67,7 @@ export const firebaseService = {
     try {
       const col = collection(db, "resellers", resellerId, "orders");
       const snap = await getDocs(col);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     } catch (err) {
       console.error("listResellerOrders error:", err);
       throw err;
@@ -104,12 +106,18 @@ export const firebaseService = {
     }
   },
 
+  /**
+   * Get all price roles for an admin category.
+   * Returns object like: { retail: { roleName, rules }, reseller: {...}, ... }
+   */
   async getCategoryPriceRoles(categoryId) {
     try {
-      const col = collection(db, "categories", categoryId, "priceRoles");
-      const snap = await getDocs(col);
+      const colRef = collection(db, "categories", categoryId, "priceRoles");
+      const snap = await getDocs(colRef);
       const out = {};
-      snap.forEach(s => { out[s.id] = s.data(); });
+      snap.forEach((s) => {
+        out[s.id] = s.data(); // docId === roleId
+      });
       return out;
     } catch (err) {
       console.error("getCategoryPriceRoles error:", err);
@@ -117,12 +125,33 @@ export const firebaseService = {
     }
   },
 
+  /**
+   * Set all price roles for an admin category.
+   * - Writes each role as doc ID = roleId
+   * - Deletes docs that are no longer present in rolesObj
+   */
   async setCategoryPriceRoles(categoryId, rolesObj) {
     try {
-      const promises = Object.entries(rolesObj || {}).map(([roleId, roleDoc]) =>
-        setDoc(doc(db, "categories", categoryId, "priceRoles", roleId), roleDoc)
-      );
-      await Promise.all(promises);
+      if (!categoryId) throw new Error("Missing categoryId");
+
+      const colRef = collection(db, "categories", categoryId, "priceRoles");
+      const batch = writeBatch(db);
+
+      // delete roles that are no longer present
+      const existingSnap = await getDocs(colRef);
+      existingSnap.forEach((d) => {
+        if (!rolesObj || !rolesObj[d.id]) {
+          batch.delete(d.ref);
+        }
+      });
+
+      // upsert roles with docId = roleId
+      for (const [roleId, roleDoc] of Object.entries(rolesObj || {})) {
+        const roleRef = doc(db, "categories", categoryId, "priceRoles", roleId);
+        batch.set(roleRef, roleDoc || {}, { merge: true });
+      }
+
+      await batch.commit();
     } catch (err) {
       console.error("setCategoryPriceRoles error:", err);
       throw err;
@@ -131,7 +160,10 @@ export const firebaseService = {
 
   async addProduct(categoryId, product) {
     try {
-      await setDoc(doc(db, "categories", categoryId, "products", product.id), product);
+      await setDoc(
+        doc(db, "categories", categoryId, "products", product.id),
+        product
+      );
     } catch (err) {
       console.error("addProduct error:", err);
       throw err;
@@ -140,7 +172,10 @@ export const firebaseService = {
 
   async updateProduct(categoryId, productId, patchObj) {
     try {
-      await updateDoc(doc(db, "categories", categoryId, "products", productId), patchObj);
+      await updateDoc(
+        doc(db, "categories", categoryId, "products", productId),
+        patchObj
+      );
     } catch (err) {
       console.error("updateProduct error:", err);
       throw err;
@@ -149,7 +184,9 @@ export const firebaseService = {
 
   async deleteProduct(categoryId, productId) {
     try {
-      await deleteDoc(doc(db, "categories", categoryId, "products", productId));
+      await deleteDoc(
+        doc(db, "categories", categoryId, "products", productId)
+      );
     } catch (err) {
       console.error("deleteProduct error:", err);
       throw err;
@@ -169,7 +206,7 @@ export const firebaseService = {
   async listResellers() {
     try {
       const snaps = await getDocs(collection(db, "resellersMeta"));
-      return snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+      return snaps.docs.map((d) => ({ id: d.id, ...d.data() }));
     } catch (err) {
       console.error("listResellers error:", err);
       throw err;
@@ -179,16 +216,16 @@ export const firebaseService = {
   async listAllOrders() {
     try {
       const resellersSnap = await getDocs(collection(db, "resellersMeta"));
-      const resellers = resellersSnap.docs.map(d => d.id);
+      const resellers = resellersSnap.docs.map((d) => d.id);
       const allOrders = [];
       for (const r of resellers) {
         const ordersSnap = await getDocs(collection(db, "resellers", r, "orders"));
-        ordersSnap.forEach(o => {
+        ordersSnap.forEach((o) => {
           const data = o.data();
           allOrders.push({
             id: o.id,
             resellerId: r,
-            ...data
+            ...data,
           });
         });
       }
@@ -207,7 +244,8 @@ export const firebaseService = {
   // ---------- Storage helpers ----------
   async uploadFiles(categoryId, productId, files, onProgress = null) {
     try {
-      if (!categoryId || !productId) throw new Error("Missing categoryId or productId for upload");
+      if (!categoryId || !productId)
+        throw new Error("Missing categoryId or productId for upload");
       const results = [];
 
       for (const file of Array.from(files)) {
@@ -221,14 +259,28 @@ export const firebaseService = {
             "state_changed",
             (snapshot) => {
               if (onProgress && typeof onProgress === "function") {
-                const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                onProgress({ name: file.name, path, percent, bytesTransferred: snapshot.bytesTransferred, total: snapshot.totalBytes });
+                const percent = Math.round(
+                  (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                );
+                onProgress({
+                  name: file.name,
+                  path,
+                  percent,
+                  bytesTransferred: snapshot.bytesTransferred,
+                  total: snapshot.totalBytes,
+                });
               }
             },
             (err) => reject(err),
             async () => {
               const url = await getDownloadURL(uploadTask.snapshot.ref);
-              results.push({ url, path, name: file.name, size: file.size, contentType: file.type });
+              results.push({
+                url,
+                path,
+                name: file.name,
+                size: file.size,
+                contentType: file.type,
+              });
               resolve();
             }
           );
@@ -260,8 +312,8 @@ export const firebaseService = {
     try {
       if (!email) return null;
       const qCol = collection(db, "admins");
-      const q = query(qCol, where("email", "==", email));
-      const snap = await getDocs(q);
+      const qy = query(qCol, where("email", "==", email));
+      const snap = await getDocs(qy);
       if (!snap.empty) {
         const d = snap.docs[0];
         return { id: d.id, ...d.data() };
@@ -331,8 +383,8 @@ export const firebaseService = {
   async getResellerByDomain(hostname) {
     try {
       const qCol = collection(db, "resellersMeta");
-      const q = query(qCol, where("domains", "array-contains", hostname));
-      const snap = await getDocs(q);
+      const qy = query(qCol, where("domains", "array-contains", hostname));
+      const snap = await getDocs(qy);
       if (!snap.empty) {
         const d = snap.docs[0];
         return { id: d.id, ...d.data() };
@@ -362,7 +414,7 @@ export const firebaseService = {
           out.push({
             categoryId: c.id,
             categoryName: c.name,
-            product: p
+            product: p,
           });
         }
       }
@@ -383,9 +435,16 @@ export const firebaseService = {
 
       // legacy selectedProducts (back-compat)
       try {
-        const legacyCol = collection(db, "resellersMeta", resellerId, "selectedProducts");
+        const legacyCol = collection(
+          db,
+          "resellersMeta",
+          resellerId,
+          "selectedProducts"
+        );
         const legacySnap = await getDocs(legacyCol);
-        legacySnap.forEach(d => { map[d.id] = d.data(); });
+        legacySnap.forEach((d) => {
+          map[d.id] = d.data();
+        });
       } catch (e) {
         // ignore legacy errors
       }
@@ -396,9 +455,16 @@ export const firebaseService = {
       if (!catsSnap.empty) {
         for (const cDoc of catsSnap.docs) {
           const cid = cDoc.id;
-          const prodCol = collection(db, "resellersMeta", resellerId, "categories", cid, "products");
+          const prodCol = collection(
+            db,
+            "resellersMeta",
+            resellerId,
+            "categories",
+            cid,
+            "products"
+          );
           const prodSnap = await getDocs(prodCol);
-          prodSnap.forEach(pDoc => {
+          prodSnap.forEach((pDoc) => {
             map[pDoc.id] = pDoc.data();
           });
         }
@@ -421,19 +487,38 @@ export const firebaseService = {
    */
   async setResellerProduct(resellerId, productId, data) {
     try {
-      if (!resellerId || !productId) throw new Error("Missing resellerId or productId");
+      if (!resellerId || !productId)
+        throw new Error("Missing resellerId or productId");
 
-      const clean = Object.fromEntries(Object.entries(data).filter(([k, v]) => v !== undefined));
+      const clean = Object.fromEntries(
+        Object.entries(data).filter(([k, v]) => v !== undefined)
+      );
       if (!clean.updatedAt) clean.updatedAt = new Date();
 
       // Option B: if categoryId provided, write under the category products subcollection
       if (clean.categoryId) {
-        await setDoc(doc(db, "resellersMeta", resellerId, "categories", clean.categoryId, "products", productId), clean, { merge: true });
+        await setDoc(
+          doc(
+            db,
+            "resellersMeta",
+            resellerId,
+            "categories",
+            clean.categoryId,
+            "products",
+            productId
+          ),
+          clean,
+          { merge: true }
+        );
       }
 
       // Legacy write for compatibility
       try {
-        await setDoc(doc(db, "resellersMeta", resellerId, "selectedProducts", productId), clean, { merge: true });
+        await setDoc(
+          doc(db, "resellersMeta", resellerId, "selectedProducts", productId),
+          clean,
+          { merge: true }
+        );
       } catch (legacyErr) {
         console.warn("legacy selectedProducts write failed", legacyErr);
       }
@@ -464,11 +549,20 @@ export const firebaseService = {
 
       // 1) Primary: read subcollection priceRoles/{roleId}
       try {
-        const rolesCol = collection(db, "resellersMeta", resellerId, "categories", categoryId, "priceRoles");
+        const rolesCol = collection(
+          db,
+          "resellersMeta",
+          resellerId,
+          "categories",
+          categoryId,
+          "priceRoles"
+        );
         const rolesSnap = await getDocs(rolesCol);
         if (!rolesSnap.empty) {
           const out = {};
-          rolesSnap.forEach(r => { out[r.id] = r.data(); });
+          rolesSnap.forEach((r) => {
+            out[r.id] = r.data(); // docId === roleId
+          });
           return out;
         }
       } catch (e) {
@@ -477,12 +571,17 @@ export const firebaseService = {
 
       // 2) Secondary: maybe the category doc stores roles as a field { roles: {...} }
       try {
-        const catDocRef = doc(db, "resellersMeta", resellerId, "categories", categoryId);
+        const catDocRef = doc(
+          db,
+          "resellersMeta",
+          resellerId,
+          "categories",
+          categoryId
+        );
         const catSnap = await getDoc(catDocRef);
         if (catSnap.exists()) {
           const data = catSnap.data();
           if (data && (data.roles || Object.keys(data).length > 0)) {
-            // If there's explicit roles field return it; otherwise return null
             return data.roles || null;
           }
         }
@@ -492,7 +591,13 @@ export const firebaseService = {
 
       // 3) Fallback legacy path: resellersMeta/{resellerId}/priceRoles/{categoryId}
       try {
-        const fallbackRef = doc(db, "resellersMeta", resellerId, "priceRoles", categoryId);
+        const fallbackRef = doc(
+          db,
+          "resellersMeta",
+          resellerId,
+          "priceRoles",
+          categoryId
+        );
         const fallbackSnap = await getDoc(fallbackRef);
         if (fallbackSnap.exists()) {
           const d = fallbackSnap.data();
@@ -514,32 +619,73 @@ export const firebaseService = {
    * Writes role documents to:
    * resellersMeta/{resellerId}/categories/{categoryId}/priceRoles/{roleId}
    *
-   * Also writes a summary field "roles" on the category doc for convenience/fast-read.
+   * Also writes a summary field "roles" on the category doc for convenience/fast-read
+   * and a legacy doc resellersMeta/{resellerId}/priceRoles/{categoryId}.
    */
   async setResellerCategoryRoles(resellerId, categoryId, rolesObj) {
     try {
-      if (!resellerId || !categoryId) throw new Error("Missing resellerId or categoryId");
+      if (!resellerId || !categoryId)
+        throw new Error("Missing resellerId or categoryId");
 
-      // 1) write each role as a document in the subcollection
-      const promises = [];
+      // 1) Use batch to clean + upsert in subcollection
+      const colRef = collection(
+        db,
+        "resellersMeta",
+        resellerId,
+        "categories",
+        categoryId,
+        "priceRoles"
+      );
+      const batch = writeBatch(db);
+
+      // delete roles that are no longer present
+      const existingSnap = await getDocs(colRef);
+      existingSnap.forEach((d) => {
+        if (!rolesObj || !rolesObj[d.id]) {
+          batch.delete(d.ref);
+        }
+      });
+
+      // upsert each role by roleId
       for (const [roleId, roleDoc] of Object.entries(rolesObj || {})) {
-        promises.push(
-          setDoc(doc(db, "resellersMeta", resellerId, "categories", categoryId, "priceRoles", roleId), roleDoc)
+        const roleRef = doc(
+          db,
+          "resellersMeta",
+          resellerId,
+          "categories",
+          categoryId,
+          "priceRoles",
+          roleId
         );
+        batch.set(roleRef, roleDoc || {}, { merge: true });
       }
-      await Promise.all(promises);
+
+      await batch.commit();
 
       // 2) write a convenience summary on the category doc
       try {
-        await setDoc(doc(db, "resellersMeta", resellerId, "categories", categoryId), { roles: rolesObj }, { merge: true });
+        await setDoc(
+          doc(
+            db,
+            "resellersMeta",
+            resellerId,
+            "categories",
+            categoryId
+          ),
+          { roles: rolesObj },
+          { merge: true }
+        );
       } catch (e) {
-        // not fatal
         console.warn("writing category summary roles field failed", e);
       }
 
       // 3) also write to legacy location for compatibility (non-fatal)
       try {
-        await setDoc(doc(db, "resellersMeta", resellerId, "priceRoles", categoryId), { roles: rolesObj }, { merge: true });
+        await setDoc(
+          doc(db, "resellersMeta", resellerId, "priceRoles", categoryId),
+          { roles: rolesObj },
+          { merge: true }
+        );
       } catch (e) {
         // ignore
       }
@@ -552,6 +698,56 @@ export const firebaseService = {
   },
 
   /**
+   * Ensure reseller has a 'reseller' (purchase) role stored under:
+   *   resellersMeta/{resellerId}/categories/{categoryId}/priceRoles/reseller
+   *
+   * Behavior:
+   *  - If reseller already has a 'reseller' role there, return it.
+   *  - Else, copy admin categories/{categoryId}/priceRoles/reseller into that location.
+   *  - If admin has no reseller role, returns null.
+   */
+  async ensureResellerPurchaseRole(resellerId, categoryId) {
+    try {
+      if (!resellerId || !categoryId) {
+        throw new Error("Missing resellerId or categoryId");
+      }
+
+      // 1) Check if reseller already has a 'reseller' role override
+      const existingRoles = await this.getResellerCategoryRoles(
+        resellerId,
+        categoryId
+      );
+      if (existingRoles && existingRoles.reseller) {
+        return existingRoles.reseller;
+      }
+
+      // 2) Load admin purchase tiers for 'reseller' role
+      const adminRoles = await this.getCategoryPriceRoles(categoryId);
+      const adminResellerRole = adminRoles?.reseller;
+      if (!adminResellerRole) {
+        console.warn(
+          "ensureResellerPurchaseRole: no admin 'reseller' role for category",
+          categoryId
+        );
+        return null;
+      }
+
+      // 3) Merge into reseller roles object and save under resellerMeta
+      const merged = {
+        ...(existingRoles || {}),
+        reseller: adminResellerRole,
+      };
+
+      await this.setResellerCategoryRoles(resellerId, categoryId, merged);
+
+      return adminResellerRole;
+    } catch (err) {
+      console.error("ensureResellerPurchaseRole error:", err);
+      throw err;
+    }
+  },
+
+  /**
    * Convenience: get all products saved under reseller/category products subcollections
    * returns: { categoryId: { productId: productDoc, ... }, ... }
    */
@@ -559,9 +755,18 @@ export const firebaseService = {
     try {
       const out = {};
       if (!resellerId || !categoryId) return out;
-      const prodCol = collection(db, "resellersMeta", resellerId, "categories", categoryId, "products");
+      const prodCol = collection(
+        db,
+        "resellersMeta",
+        resellerId,
+        "categories",
+        categoryId,
+        "products"
+      );
       const snap = await getDocs(prodCol);
-      snap.forEach(d => { out[d.id] = d.data(); });
+      snap.forEach((d) => {
+        out[d.id] = d.data();
+      });
       return out;
     } catch (err) {
       console.error("getResellerCategoryProducts error:", err);
@@ -574,13 +779,32 @@ export const firebaseService = {
    */
   async setResellerCategoryProduct(resellerId, categoryId, productId, data) {
     try {
-      if (!resellerId || !categoryId || !productId) throw new Error("Missing identifiers");
-      const clean = Object.fromEntries(Object.entries(data).filter(([k, v]) => v !== undefined));
+      if (!resellerId || !categoryId || !productId)
+        throw new Error("Missing identifiers");
+      const clean = Object.fromEntries(
+        Object.entries(data).filter(([k, v]) => v !== undefined)
+      );
       if (!clean.updatedAt) clean.updatedAt = new Date();
-      await setDoc(doc(db, "resellersMeta", resellerId, "categories", categoryId, "products", productId), clean, { merge: true });
+      await setDoc(
+        doc(
+          db,
+          "resellersMeta",
+          resellerId,
+          "categories",
+          categoryId,
+          "products",
+          productId
+        ),
+        clean,
+        { merge: true }
+      );
       // Also update legacy selectedProducts for compatibility
       try {
-        await setDoc(doc(db, "resellersMeta", resellerId, "selectedProducts", productId), clean, { merge: true });
+        await setDoc(
+          doc(db, "resellersMeta", resellerId, "selectedProducts", productId),
+          clean,
+          { merge: true }
+        );
       } catch (legacyErr) {
         console.warn("legacy selectedProducts write failed", legacyErr);
       }
@@ -604,7 +828,11 @@ export const firebaseService = {
 
   async setResellerPriceRoles(resellerId, categoryId, rolesObj) {
     try {
-      return await this.setResellerCategoryRoles(resellerId, categoryId, rolesObj);
+      return await this.setResellerCategoryRoles(
+        resellerId,
+        categoryId,
+        rolesObj
+      );
     } catch (err) {
       console.error("setResellerPriceRoles (shim) error:", err);
       throw err;
@@ -613,35 +841,52 @@ export const firebaseService = {
 
   /**
    * Compute unit price for a role (tries reseller override first, then admin category)
-   * role: 'reseller' by default. qty default 1.
-   * Returns price number or throws if no rule found.
+   * role: 'reseller' by default (used for purchase cost).
+   * For storefront retail, always call with role = 'retail'.
    */
-  async computeUnitPriceForRole(categoryId, role = "reseller", qty = 1, resellerId = null) {
+  async computeUnitPriceForRole(
+    categoryId,
+    role = "reseller",
+    qty = 1,
+    resellerId = null
+  ) {
     try {
-      // try reseller override (Option B)
+      const quantity = Number(qty) || 1;
+
+      // 1) reseller override (Option B)
       if (resellerId) {
-        const resellerRoles = await this.getResellerPriceRoles(resellerId, categoryId);
-        if (resellerRoles && resellerRoles[role] && Array.isArray(resellerRoles[role].rules)) {
-          const rules = resellerRoles[role].rules;
-          for (const r of rules) {
+        const resellerRoles = await this.getResellerPriceRoles(
+          resellerId,
+          categoryId
+        );
+        const roleDef = resellerRoles?.[role];
+        if (roleDef && Array.isArray(roleDef.rules)) {
+          for (const r of roleDef.rules) {
             const min = Number(r.min || 0);
             const max = Number(r.max || 9999999);
-            if (qty >= min && qty <= max) return Number(r.price);
+            if (quantity >= min && quantity <= max) {
+              return Number(r.price);
+            }
           }
         }
       }
 
-      // fallback to admin category rules
-      const roleDoc = await this.getPriceRoleRules(categoryId, role);
-      if (roleDoc && Array.isArray(roleDoc.rules)) {
-        for (const r of roleDoc.rules) {
+      // 2) admin category rules
+      const catRoles = await this.getCategoryPriceRoles(categoryId);
+      const roleDef = catRoles?.[role];
+      if (roleDef && Array.isArray(roleDef.rules)) {
+        for (const r of roleDef.rules) {
           const min = Number(r.min || 0);
           const max = Number(r.max || 9999999);
-          if (qty >= min && qty <= max) return Number(r.price);
+          if (quantity >= min && quantity <= max) {
+            return Number(r.price);
+          }
         }
       }
 
-      throw new Error(`No pricing rule matches qty ${qty} for role ${role} in category ${categoryId}`);
+      throw new Error(
+        `No pricing rule matches qty ${quantity} for role ${role} in category ${categoryId}`
+      );
     } catch (err) {
       console.error("computeUnitPriceForRole error:", err);
       throw err;

@@ -2,7 +2,8 @@
 import React, { useState } from "react";
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import "../admin/login.css";
+import "./reseller-login.css";
+
 
 export default function ResellerLogin() {
   const nav = useNavigate();

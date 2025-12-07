@@ -139,7 +139,6 @@ export default function Categories() {
       }
 
       // call firebaseService to write roles object for this category
-      // your firebaseService.setCategoryPriceRoles expects an object keyed by role id
       await firebaseService.setCategoryPriceRoles(selected.id, priceRolesUI);
       alert("Price roles saved.");
     } catch (err) {
@@ -152,11 +151,13 @@ export default function Categories() {
 
   return (
     <div className="cat-wrapper">
-
       {/* LEFT: categories list */}
       <div className="cat-panel">
         <div className="panel-head">
-          <h2>Categories</h2>
+          <div>
+            <h2>Categories</h2>
+            <p className="panel-sub">Manage your product groups and pricing roles.</p>
+          </div>
         </div>
 
         {loading ? (
@@ -165,15 +166,19 @@ export default function Categories() {
           <ul className="cat-list">
             {cats.map((c) => (
               <li key={c.id} className={`cat-item ${selected?.id === c.id ? "active" : ""}`}>
-                <div className="cat-info" onClick={() => selectCat(c)}>
+                <button
+                  type="button"
+                  className="cat-info"
+                  onClick={() => selectCat(c)}
+                >
                   <div className="cat-circle">{c.name.charAt(0).toUpperCase()}</div>
                   <div>
                     <div className="cat-name">{c.name}</div>
                     <div className="cat-id">{c.id}</div>
                   </div>
-                </div>
+                </button>
 
-                <button className="btn-delete" onClick={() => deleteCategory(c.id)}>
+                <button className="btn-icon-delete" onClick={() => deleteCategory(c.id)} title="Delete category">
                   ✕
                 </button>
               </li>
@@ -197,12 +202,16 @@ export default function Categories() {
       {/* RIGHT: editor with tabs */}
       <div className="cat-editor">
         {!selected ? (
-          <div className="editor-empty">Select a category on the left to edit.</div>
+          <div className="editor-empty">
+            <h3>Select a category</h3>
+            <p>Choose a category on the left to configure pricing rules and view basic stats.</p>
+          </div>
         ) : (
           <div className="editor-card">
             <div className="editor-top">
               <div>
                 <h2>{selected.name}</h2>
+                <div className="cat-id-badge">{selected.id}</div>
                 <div className="meta-row">
                   <div className="meta-pill">Products: {meta.productCount}</div>
                   <div className="meta-pill">Images: {(selected.images || []).length}</div>
@@ -212,7 +221,12 @@ export default function Categories() {
 
             <section className="roles-section">
               <div className="roles-header">
-                <h3>Price Roles</h3>
+                <div>
+                  <h3>Price Roles</h3>
+                  <p className="roles-sub">
+                    Define quantity-based pricing tiers for each role (e.g. <span className="inline-code">retail</span>, <span className="inline-code">wholesale</span>).
+                  </p>
+                </div>
                 <div className="roles-actions">
                   <RoleAdd onAdd={addRole} />
                   <button className="btn-save small" disabled={rolesSaving} onClick={saveRoles}>
@@ -223,7 +237,7 @@ export default function Categories() {
 
               <div className="roles-list">
                 {Object.keys(priceRolesUI || {}).length === 0 && (
-                  <div className="roles-empty">No price roles defined. Add one to start.</div>
+                  <div className="roles-empty">No price roles defined yet. Add one to start.</div>
                 )}
 
                 {Object.entries(priceRolesUI).map(([roleId, roleDoc]) => (
@@ -235,8 +249,20 @@ export default function Categories() {
                       </div>
 
                       <div className="role-controls">
-                        <button className="btn-ghost small" onClick={() => addRuleToRole(roleId)}>+ Rule</button>
-                        <button className="btn-danger small" onClick={() => removeRole(roleId)}>Remove role</button>
+                        <button
+                          type="button"
+                          className="btn-ghost small"
+                          onClick={() => addRuleToRole(roleId)}
+                        >
+                          + Rule
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-danger small"
+                          onClick={() => removeRole(roleId)}
+                        >
+                          Remove role
+                        </button>
                       </div>
                     </div>
 
@@ -244,33 +270,51 @@ export default function Categories() {
                       {(roleDoc.rules || []).map((r, idx) => (
                         <div className="rule-row" key={idx}>
                           <div className="rule-inputs">
-                            <input
-                              type="number"
-                              min="0"
-                              value={r.min}
-                              onChange={(e) => updateRule(roleId, idx, "min", Number(e.target.value))}
-                              className="rule-field"
-                            />
-                            <div className="rule-sep">—</div>
-                            <input
-                              type="number"
-                              min="0"
-                              value={r.max}
-                              onChange={(e) => updateRule(roleId, idx, "max", Number(e.target.value))}
-                              className="rule-field"
-                            />
-                            <input
-                              type="number"
-                              min="0"
-                              value={r.price}
-                              onChange={(e) => updateRule(roleId, idx, "price", Number(e.target.value))}
-                              className="rule-price"
-                              placeholder="price"
-                            />
+                            <div className="rule-group">
+                              <label className="rule-label">Min qty</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={r.min}
+                                onChange={(e) => updateRule(roleId, idx, "min", Number(e.target.value))}
+                                className="rule-field"
+                              />
+                            </div>
+
+                            <div className="rule-sep">–</div>
+
+                            <div className="rule-group">
+                              <label className="rule-label">Max qty</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={r.max}
+                                onChange={(e) => updateRule(roleId, idx, "max", Number(e.target.value))}
+                                className="rule-field"
+                              />
+                            </div>
+
+                            <div className="rule-group">
+                              <label className="rule-label">Unit price</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={r.price}
+                                onChange={(e) => updateRule(roleId, idx, "price", Number(e.target.value))}
+                                className="rule-price"
+                                placeholder="price"
+                              />
+                            </div>
                           </div>
 
                           <div className="rule-actions">
-                            <button className="btn-ghost small" onClick={() => removeRuleFromRole(roleId, idx)}>Remove</button>
+                            <button
+                              type="button"
+                              className="btn-ghost small"
+                              onClick={() => removeRuleFromRole(roleId, idx)}
+                            >
+                              Remove
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -290,14 +334,22 @@ export default function Categories() {
 function RoleAdd({ onAdd = () => {} }) {
   const [val, setVal] = useState("");
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div className="role-add-inline">
       <input
         className="input-text small"
         placeholder="role id (e.g. retail)"
         value={val}
         onChange={e => setVal(e.target.value)}
       />
-      <button className="btn-add small" onClick={() => { onAdd(val); setVal(""); }}>Add role</button>
+      <button
+        className="btn-add small"
+        onClick={() => {
+          onAdd(val);
+          setVal("");
+        }}
+      >
+        Add role
+      </button>
     </div>
   );
 }

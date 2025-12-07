@@ -110,16 +110,25 @@ export default function Resellers() {
 
   return (
     <div className="res-wrapper">
-      <h1>Resellers</h1>
+      <div className="res-header">
+        <h1>Resellers</h1>
+        <p className="res-subtitle">
+          Manage partner stores and optionally create login accounts for them.
+        </p>
+      </div>
 
       <div className="res-grid">
-
         {/* LEFT LIST */}
         <div className="res-list-panel">
-          <h2>Existing Resellers</h2>
+          <div className="res-panel-head">
+            <h2>Existing Resellers</h2>
+            <p className="res-panel-sub">
+              Overview of all partner stores synced with your catalog.
+            </p>
+          </div>
 
           {loading ? (
-            <div>Loading…</div>
+            <div className="res-loading">Loading resellers…</div>
           ) : (
             <ul className="res-list">
               {resellers.map(r => (
@@ -133,9 +142,9 @@ export default function Resellers() {
                     <div className="res-id">{r.id}</div>
                     <div className="res-meta">
                       {r.email ? (
-                        <span className="tag">Login: {r.email}</span>
+                        <span className="res-tag">Login: {r.email}</span>
                       ) : (
-                        <span className="tag muted">No login</span>
+                        <span className="res-tag muted">No login configured</span>
                       )}
                     </div>
                   </div>
@@ -147,44 +156,76 @@ export default function Resellers() {
 
         {/* RIGHT FORM */}
         <div className="res-form-panel">
-          <h2>Add New Reseller</h2>
+          <div className="res-panel-head">
+            <h2>Add New Reseller</h2>
+            <p className="res-panel-sub">
+              Create a reseller profile and optionally provision a login account.
+            </p>
+          </div>
 
-          <label>ID</label>
-          <input
-            value={newR.id}
-            onChange={(e) => setNewR({ ...newR, id: e.target.value })}
-            placeholder="unique-id"
-          />
+          <div className="res-field">
+            <label htmlFor="res-id">Reseller ID</label>
+            <input
+              id="res-id"
+              className="res-input"
+              value={newR.id}
+              onChange={(e) => setNewR({ ...newR, id: e.target.value })}
+              placeholder="unique-id (used in URLs & lookups)"
+            />
+          </div>
 
-          <label>Name</label>
-          <input
-            value={newR.name}
-            onChange={(e) => setNewR({ ...newR, name: e.target.value })}
-            placeholder="Store name"
-          />
+          <div className="res-field">
+            <label htmlFor="res-name">Store name</label>
+            <input
+              id="res-name"
+              className="res-input"
+              value={newR.name}
+              onChange={(e) => setNewR({ ...newR, name: e.target.value })}
+              placeholder="Store display name"
+            />
+          </div>
 
-          <hr />
+          <div className="res-field res-field-divider">
+            <span className="res-section-label">Login (optional)</span>
+            <p className="res-field-help">
+              If you provide credentials, a Firebase Auth user will be created and linked
+              to this reseller.
+            </p>
+          </div>
 
-          <label>Login Email (optional)</label>
-          <input
-            value={newR.email}
-            onChange={(e) => setNewR({ ...newR, email: e.target.value })}
-            placeholder="owner@store.com"
-          />
+          <div className="res-field">
+            <label htmlFor="res-email">Login email</label>
+            <input
+              id="res-email"
+              className="res-input"
+              value={newR.email}
+              onChange={(e) => setNewR({ ...newR, email: e.target.value })}
+              placeholder="owner@store.com"
+            />
+          </div>
 
-          <label>Password (optional)</label>
-          <input
-            type="password"
-            value={newR.password}
-            onChange={(e) => setNewR({ ...newR, password: e.target.value })}
-            placeholder="temporary password"
-          />
+          <div className="res-field">
+            <label htmlFor="res-password">Password</label>
+            <input
+              id="res-password"
+              type="password"
+              className="res-input"
+              value={newR.password}
+              onChange={(e) => setNewR({ ...newR, password: e.target.value })}
+              placeholder="temporary password"
+            />
+          </div>
 
-          <button disabled={busy} onClick={addReseller}>
-            {busy ? "Working…" : "Add Reseller"}
-          </button>
+          <div className="res-actions">
+            <button
+              className="res-add-btn"
+              disabled={busy}
+              onClick={addReseller}
+            >
+              {busy ? "Working…" : "Add Reseller"}
+            </button>
+          </div>
         </div>
-
       </div>
     </div>
   );

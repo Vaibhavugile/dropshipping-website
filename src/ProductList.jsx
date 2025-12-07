@@ -3,8 +3,9 @@ import React from "react";
 import { useResellerCatalog } from "./hooks/useResellerCatalog";
 import { useCartDispatch } from "./contexts/CartContext";
 import { firebaseService } from "./api/firebaseService";
-import './product-card.css'
-export default function ProductList({ resellerId }) {
+import "./product-card.css";
+
+export default function ProductList({ resellerId, pricingRole = "retail" }) {
   const { categories, productsByCategory, loading, error } =
     useResellerCatalog(resellerId);
   const dispatch = useCartDispatch();
@@ -40,7 +41,11 @@ export default function ProductList({ resellerId }) {
   return (
     <div className="catalog">
       {visibleCategories.map((cat) => (
-        <section key={cat.id} className="category-section" style={{ marginBottom: 24 }}>
+        <section
+          key={cat.id}
+          className="category-section"
+          style={{ marginBottom: 24 }}
+        >
           <h2 className="category-title">{cat.name}</h2>
           <div
             className="product-grid"
@@ -56,6 +61,7 @@ export default function ProductList({ resellerId }) {
                 product={p}
                 categoryId={cat.id}
                 resellerId={resellerId}
+                pricingRole={pricingRole}
                 dispatch={dispatch}
               />
             ))}
@@ -66,7 +72,13 @@ export default function ProductList({ resellerId }) {
   );
 }
 
-function ProductCard({ product, categoryId, resellerId, dispatch }) {
+function ProductCard({
+  product,
+  categoryId,
+  resellerId,
+  pricingRole = "retail",
+  dispatch,
+}) {
   const [qty, setQty] = React.useState(1);
   const [variant, setVariant] = React.useState(null);
 
@@ -100,9 +112,9 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
               resellerId,
               categoryId
             )) || null;
-          const retailRole = resellerRoles?.retail;
-          if (retailRole && Array.isArray(retailRole.rules)) {
-            resolvedRules = retailRole.rules;
+          const roleDef = resellerRoles?.[pricingRole];
+          if (roleDef && Array.isArray(roleDef.rules)) {
+            resolvedRules = roleDef.rules;
           }
         }
 
@@ -110,7 +122,7 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
         if (!resolvedRules) {
           const adminRole = await firebaseService.getPriceRoleRules(
             categoryId,
-            "retail"
+            pricingRole
           );
           if (adminRole && Array.isArray(adminRole.rules)) {
             resolvedRules = adminRole.rules;
@@ -130,12 +142,12 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
     return () => {
       cancelled = true;
     };
-  }, [categoryId, resellerId]);
+  }, [categoryId, resellerId, pricingRole]);
 
   // --- Pricing logic ---
   // Priority:
   // 1) product.resellerSelection.sellingPrice (fixed)
-  // 2) category tiers via computeUnitPriceForRole (role="retail", qty, resellerId)
+  // 2) category tiers via computeUnitPriceForRole (pricingRole, qty, resellerId)
   React.useEffect(() => {
     let cancelled = false;
 
@@ -154,7 +166,7 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
           return;
         }
 
-        // 2) Use tiered pricing (retail role) based on qty
+        // 2) Use tiered pricing based on qty & chosen role
         if (!categoryId) {
           if (!cancelled) {
             setUnitPrice(null);
@@ -168,7 +180,7 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
         try {
           const price = await firebaseService.computeUnitPriceForRole(
             categoryId,
-            "retail", // role used for customer-facing price
+            pricingRole, // <-- use selected role here
             Number(qty) || 1,
             resellerId || null
           );
@@ -200,13 +212,13 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
     return () => {
       cancelled = true;
     };
-  }, [categoryId, resellerId, qty, product]);
+  }, [categoryId, resellerId, qty, product, pricingRole]);
 
   const addToCart = () => {
     const item = { categoryId, productId: product.id, qty: Number(qty) };
     if (variantType && variant)
       item.variant = { type: variantType, value: variant };
-    // We don't send price here — backend will recompute based on tiers for safety
+    // price is recomputed on backend
     dispatch({ type: "ADD_ITEM", item });
   };
 
@@ -217,8 +229,12 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
   let tierLabel = null;
   let savingsLabel = null;
 
-  // only show tier info if we're using category tiers (i.e. NOT fixed sellingPrice)
-  if (unitPrice != null && rules && rules.length > 0 && !(product.resellerSelection?.sellingPrice)) {
+  if (
+    unitPrice != null &&
+    rules &&
+    rules.length > 0 &&
+    !(product.resellerSelection?.sellingPrice)
+  ) {
     const baseTier = rules[0];
     const activeTier =
       rules.find((r) => {
@@ -259,17 +275,17 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
         style={{ height: 120, background: "#eee", marginBottom: 8 }}
       />
 
-      {/* name: e.g. "Men's T-Shirt Classic" */}
+      {/* name */}
       <div className="product-title" style={{ fontWeight: 700 }}>
         {product.productName || product.productCode || product.id}
       </div>
 
-      {/* code: e.g. "Code: A-TS1" */}
+      {/* code */}
       <div className="product-code" style={{ color: "#666", fontSize: 13 }}>
         Code: {product.productCode || product.id}
       </div>
 
-      {/* stock: e.g. "Stock: 388" */}
+      {/* stock */}
       <div
         className="product-stock"
         style={{ marginTop: 4, fontSize: 13, color: "#475569" }}
@@ -277,11 +293,7 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
         Stock: {product.stock ?? (product.variants ? "varied" : "—")}
       </div>
 
-      {/* Price display: 
-          Price: ₹ 900 / unit
-          Qty 1 total: ₹ 900
-          + optional Tier / Savings
-      */}
+      {/* price + tier + savings */}
       <div className="price-block" style={{ marginTop: 6, fontSize: 13 }}>
         {priceLoading ? (
           <span>Price: calculating…</span>
@@ -328,7 +340,7 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
         )}
       </div>
 
-      {/* variants: e.g. "Choose sizes:" */}
+      {/* variants */}
       {variantType && variantOptions.length > 0 && (
         <div
           className="variant-block"
@@ -351,7 +363,7 @@ function ProductCard({ product, categoryId, resellerId, dispatch }) {
         </div>
       )}
 
-      {/* qty + add button */}
+      {/* qty + add */}
       <div
         className="product-actions"
         style={{
